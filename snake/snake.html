@@ -23,6 +23,7 @@
             align-items: flex-start;
             gap: 30px;
             margin-top: 20px;
+            flex-wrap: wrap;
         }
 
         #game-area {
@@ -41,12 +42,16 @@
         #controls {
             text-align: center;
             margin: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
         }
 
         button {
             padding: 12px 25px;
             font-size: 16px;
-            margin: 10px;
             border-radius: 5px;
             border: none;
             background-color: #00cc88;
@@ -91,171 +96,232 @@
             line-height: 1.6em;
             max-width: 220px;
         }
+
+        #speed-control {
+            color: #f0f0f0;
+            font-size: 16px;
+        }
+
+        #speedRange {
+            vertical-align: middle;
+        }
+
+        #speedValue {
+            color: #00ff99;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
-<h2>Gesture Controlled Snake Game</h2>
+    <h2>Gesture Controlled Snake Game</h2>
 
-<div id="controls">
-    <button type="button" onclick="init()">Start</button>
-    <button onclick="tryAgain()">Try Again</button>
-</div>
+    <div id="controls">
+        <button onclick="init()">Start</button>
+        <button onclick="tryAgain()">Try Again</button>
 
-<div id="main">
-    <div id="game-area">
-        <div id="score">Score: 0</div>
-        <canvas id="game" width="400" height="400"></canvas>
+        <div id="speed-control">
+            <label for="speedRange">Snake Speed:</label>
+            <input type="range" id="speedRange" min="50" max="500" step="10" value="200">
+            <span id="speedValue">200 ms</span>
+        </div>
+
+        <button onclick="toggleFullscreen()">Toggle Fullscreen</button>
     </div>
 
-    <div id="webcam-side">
-        <div id="webcam-container"></div>
-        <div id="label-container"></div>
+    <div id="main">
+        <div id="game-area">
+            <div id="score">Score: 0</div>
+            <canvas id="game" width="400" height="400"></canvas>
+        </div>
+
+        <div id="webcam-side">
+            <div id="webcam-container"></div>
+            <div id="label-container"></div>
+        </div>
     </div>
-</div>
 
-<!-- Tensorflow + Teachable Machine -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <!-- 🎧 Sound effects -->
+    <audio id="eatSound" src="eat.mp3" preload="auto"></audio>
+    <audio id="gameoverSound" src="gameover.mp3" preload="auto"></audio>
 
-<script type="text/javascript">
-    const URL = "./tm-my-image-model/"; // your model path
+    <!-- Tensorflow + Teachable Machine -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
-    let model, webcam, labelContainer, maxPredictions;
+    <script type="text/javascript">
+        const URL = "./tm-my-image-model/"; // your model path
 
-    // Snake vars
-    const canvas = document.getElementById("game");
-    const ctx = canvas.getContext("2d");
+        let model, webcam, labelContainer, maxPredictions;
 
-    const box = 20;
-    let snake, food, direction, gameLoop, score;
+        // Snake vars
+        const canvas = document.getElementById("game");
+        const ctx = canvas.getContext("2d");
+        const box = 20;
+        let snake, food, direction, gameLoop, score;
 
-    async function init() {
-        alert("Webcam will start. Only gestures above 60% will move the snake!");
+        const eatSound = document.getElementById("eatSound");
+        const gameoverSound = document.getElementById("gameoverSound");
 
-        const modelURL = URL + "model.json";
-        const metadataURL = URL + "metadata.json";
+        async function init() {
+            alert("Webcam will start. Only gestures above 60% will move the snake!");
 
-        model = await tmImage.load(modelURL, metadataURL);
-        maxPredictions = model.getTotalClasses();
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
 
-        const flip = true;
-        webcam = new tmImage.Webcam(200, 200, flip);
-        await webcam.setup();
-        await webcam.play();
-        window.requestAnimationFrame(loop);
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
 
-        document.getElementById("webcam-container").appendChild(webcam.canvas);
-        labelContainer = document.getElementById("label-container");
-        labelContainer.innerHTML = "";
-        for (let i = 0; i < maxPredictions; i++) {
-            labelContainer.appendChild(document.createElement("div"));
+            const flip = true;
+            webcam = new tmImage.Webcam(200, 200, flip);
+            await webcam.setup({ facingMode: "user" }); // Front camera
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+            labelContainer.innerHTML = "";
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+
+            initGame();
         }
 
-        initGame();
-    }
-
-    function initGame() {
-        snake = [{ x: 10 * box, y: 10 * box }];
-        food = {
-            x: Math.floor(Math.random() * 20) * box,
-            y: Math.floor(Math.random() * 20) * box
-        };
-        direction = "RIGHT";
-        score = 0;
-        updateScore();
-
-        if (gameLoop) clearInterval(gameLoop);
-        gameLoop = setInterval(draw, 200);
-    }
-
-    function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        for (let i = 0; i < snake.length; i++) {
-            ctx.fillStyle = (i == 0) ? "lime" : "green";
-            ctx.fillRect(snake[i].x, snake[i].y, box, box);
-        }
-
-        ctx.fillStyle = "red";
-        ctx.fillRect(food.x, food.y, box, box);
-
-        let snakeX = snake[0].x;
-        let snakeY = snake[0].y;
-
-        if (direction == "LEFT") snakeX -= box;
-        if (direction == "RIGHT") snakeX += box;
-        if (direction == "UP") snakeY -= box;
-        if (direction == "DOWN") snakeY += box;
-
-        if (snakeX == food.x && snakeY == food.y) {
-            score++;
-            updateScore();
+        function initGame() {
+            snake = [{ x: 10 * box, y: 10 * box }];
             food = {
                 x: Math.floor(Math.random() * 20) * box,
                 y: Math.floor(Math.random() * 20) * box
             };
-        } else {
-            snake.pop();
+            direction = "RIGHT";
+            score = 0;
+            updateScore();
+
+            const speed = document.getElementById("speedRange").value;
+            document.getElementById("speedValue").innerText = speed + " ms";
+
+            if (gameLoop) clearInterval(gameLoop);
+            gameLoop = setInterval(draw, speed);
         }
 
-        let newHead = { x: snakeX, y: snakeY };
-
-        if (
-            snakeX < 0 || snakeY < 0 ||
-            snakeX >= canvas.width || snakeY >= canvas.height ||
-            collision(newHead, snake)
-        ) {
-            clearInterval(gameLoop);
-            alert("Game Over! Your score: " + score + "\nClick 'Try Again' to restart.");
-        }
-
-        snake.unshift(newHead);
-    }
-
-    function collision(head, array) {
-        for (let i = 0; i < array.length; i++) {
-            if (head.x == array[i].x && head.y == array[i].y) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function tryAgain() {
-        initGame();
-    }
-
-    function updateScore() {
-        document.getElementById("score").innerText = "Score: " + score;
-    }
-
-    async function loop() {
-        webcam.update();
-        await predict();
-        window.requestAnimationFrame(loop);
-    }
-
-    async function predict() {
-        const prediction = await model.predict(webcam.canvas);
-        for (let i = 0; i < maxPredictions; i++) {
-            const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
-            labelContainer.childNodes[i].innerHTML = classPrediction;
-        }
-
-        prediction.forEach(p => {
-            const gesture = p.className.toLowerCase();
-            const accuracy = p.probability * 100;
-
-            if (accuracy > 60) {
-                if (gesture == "left" && direction != "RIGHT") direction = "LEFT";
-                else if (gesture == "right" && direction != "LEFT") direction = "RIGHT";
-                else if (gesture == "up" && direction != "DOWN") direction = "UP";
-                else if (gesture == "down" && direction != "UP") direction = "DOWN";
+        document.getElementById("speedRange").addEventListener("input", function () {
+            document.getElementById("speedValue").innerText = this.value + " ms";
+            if (gameLoop) {
+                clearInterval(gameLoop);
+                gameLoop = setInterval(draw, this.value);
             }
         });
-    }
-</script>
 
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillStyle = (i == 0) ? "lime" : "green";
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
+            }
+
+            ctx.fillStyle = "red";
+            ctx.fillRect(food.x, food.y, box, box);
+
+            let snakeX = snake[0].x;
+            let snakeY = snake[0].y;
+
+            if (direction == "LEFT") snakeX -= box;
+            if (direction == "RIGHT") snakeX += box;
+            if (direction == "UP") snakeY -= box;
+            if (direction == "DOWN") snakeY += box;
+
+            if (snakeX == food.x && snakeY == food.y) {
+                eatSound.play(); // 🍎 Play eat sound
+                score++;
+                updateScore();
+                food = {
+                    x: Math.floor(Math.random() * 20) * box,
+                    y: Math.floor(Math.random() * 20) * box
+                };
+            } else {
+                snake.pop();
+            }
+
+            let newHead = { x: snakeX, y: snakeY };
+
+            if (
+                snakeX < 0 || snakeY < 0 ||
+                snakeX >= canvas.width || snakeY >= canvas.height ||
+                collision(newHead, snake)
+            ) {
+                gameoverSound.play(); // 💥 Play game over sound
+                clearInterval(gameLoop);
+                alert("Game Over! Your score: " + score + "\nClick 'Try Again' to restart.");
+            }
+
+            snake.unshift(newHead);
+        }
+
+        function collision(head, array) {
+            for (let i = 0; i < array.length; i++) {
+                if (head.x == array[i].x && head.y == array[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function tryAgain() {
+            initGame();
+        }
+
+        function updateScore() {
+            document.getElementById("score").innerText = "Score: " + score;
+        }
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+
+            prediction.forEach(p => {
+                const gesture = p.className.toLowerCase();
+                const accuracy = p.probability * 100;
+
+                if (accuracy > 60) {
+                    if (gesture == "left" && direction != "RIGHT") direction = "LEFT";
+                    else if (gesture == "right" && direction != "LEFT") direction = "RIGHT";
+                    else if (gesture == "up" && direction != "DOWN") direction = "UP";
+                    else if (gesture == "down" && direction != "UP") direction = "DOWN";
+                }
+            });
+        }
+
+        function toggleFullscreen() {
+            const elem = document.documentElement;
+            if (!document.fullscreenElement) {
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen();
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        }
+    </script>
 </body>
 </html>
