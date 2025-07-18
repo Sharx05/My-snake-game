@@ -1,27 +1,35 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gesture Controlled Snake Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body {
-            background-color: #1a1a1a;
-            color: #f0f0f0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: 'Roboto', sans-serif;
             margin: 0;
             padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         h2 {
-            color: #00ff99;
-            margin-bottom: 10px;
+            color: #00e676;
+            margin-bottom: 20px;
+            font-size: 2.5em;
             text-align: center;
+            text-shadow: 0 0 10px #00e676;
         }
 
         #main {
             display: flex;
             justify-content: center;
             align-items: flex-start;
-            gap: 30px;
+            gap: 40px;
             margin-top: 20px;
             flex-wrap: wrap;
         }
@@ -34,42 +42,41 @@
             background: #000;
             display: block;
             margin: 20px auto;
-            border: 2px solid #00ff99;
-            border-radius: 8px;
-            box-shadow: 0 0 15px #00ff99;
+            border: 3px solid #00e676;
+            border-radius: 12px;
+            box-shadow: 0 0 20px #00e676;
         }
 
         #controls {
-            text-align: center;
-            margin: 15px;
             display: flex;
             justify-content: center;
             align-items: center;
             gap: 20px;
             flex-wrap: wrap;
+            margin-bottom: 20px;
         }
 
         button {
-            padding: 12px 25px;
-            font-size: 16px;
-            border-radius: 5px;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 8px;
             border: none;
-            background-color: #00cc88;
+            background-color: #00c853;
             color: white;
             cursor: pointer;
             transition: background-color 0.3s ease, transform 0.2s ease;
         }
 
         button:hover {
-            background-color: #00ff99;
-            transform: scale(1.05);
+            background-color: #00e676;
+            transform: scale(1.1);
         }
 
         #score {
-            font-size: 24px;
+            font-size: 28px;
             font-weight: bold;
-            color: #00ff99;
-            margin-bottom: 10px;
+            color: #00e676;
+            margin-bottom: 15px;
         }
 
         #webcam-side {
@@ -79,35 +86,40 @@
         }
 
         #webcam-container {
-            border: 2px solid #555;
-            border-radius: 8px;
+            border: 3px solid #666;
+            border-radius: 12px;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 0 15px #666;
         }
 
         #label-container {
             text-align: left;
-            padding: 10px;
-            border: 2px solid #555;
-            border-radius: 8px;
-            background-color: #222;
-            color: #00ff99;
-            font-size: 16px;
-            line-height: 1.6em;
-            max-width: 220px;
+            padding: 15px;
+            border: 3px solid #666;
+            border-radius: 12px;
+            background-color: #1e1e1e;
+            color: #00e676;
+            font-size: 18px;
+            line-height: 1.8em;
+            max-width: 250px;
         }
 
         #speed-control {
-            color: #f0f0f0;
-            font-size: 16px;
+            color: #e0e0e0;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         #speedRange {
             vertical-align: middle;
+            cursor: pointer;
         }
 
         #speedValue {
-            color: #00ff99;
+            color: #00e676;
             font-weight: bold;
         }
     </style>
@@ -117,16 +129,16 @@
     <h2>Gesture Controlled Snake Game</h2>
 
     <div id="controls">
-        <button onclick="init()">Start</button>
+        <button onclick="init()">Start Game</button>
         <button onclick="tryAgain()">Try Again</button>
 
         <div id="speed-control">
-            <label for="speedRange">Snake Speed:</label>
+            <label for="speedRange">Speed:</label>
             <input type="range" id="speedRange" min="50" max="500" step="10" value="200">
             <span id="speedValue">200 ms</span>
         </div>
 
-        <button onclick="toggleFullscreen()">Toggle Fullscreen</button>
+        <button onclick="toggleFullscreen()">Fullscreen</button>
     </div>
 
     <div id="main">
@@ -141,20 +153,16 @@
         </div>
     </div>
 
-    <!-- 🎧 Sound effects -->
     <audio id="eatSound" src="eat.mp3" preload="auto"></audio>
     <audio id="gameoverSound" src="gameover.mp3" preload="auto"></audio>
 
-    <!-- Tensorflow + Teachable Machine -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
     <script type="text/javascript">
-        const URL = "./tm-my-image-model/"; // your model path
+        const URL = "./tm-my-image-model/";
 
         let model, webcam, labelContainer, maxPredictions;
-
-        // Snake vars
         const canvas = document.getElementById("game");
         const ctx = canvas.getContext("2d");
         const box = 20;
@@ -164,7 +172,7 @@
         const gameoverSound = document.getElementById("gameoverSound");
 
         async function init() {
-            alert("Webcam will start. Only gestures above 60% will move the snake!");
+            alert("Webcam will start. Gestures over 60% will control the snake.");
 
             const modelURL = URL + "model.json";
             const metadataURL = URL + "metadata.json";
@@ -174,7 +182,7 @@
 
             const flip = true;
             webcam = new tmImage.Webcam(200, 200, flip);
-            await webcam.setup({ facingMode: "user" }); // Front camera
+            await webcam.setup({ facingMode: "user" });
             await webcam.play();
             window.requestAnimationFrame(loop);
 
@@ -217,7 +225,7 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             for (let i = 0; i < snake.length; i++) {
-                ctx.fillStyle = (i == 0) ? "lime" : "green";
+                ctx.fillStyle = (i === 0) ? "lime" : "green";
                 ctx.fillRect(snake[i].x, snake[i].y, box, box);
             }
 
@@ -227,13 +235,13 @@
             let snakeX = snake[0].x;
             let snakeY = snake[0].y;
 
-            if (direction == "LEFT") snakeX -= box;
-            if (direction == "RIGHT") snakeX += box;
-            if (direction == "UP") snakeY -= box;
-            if (direction == "DOWN") snakeY += box;
+            if (direction === "LEFT") snakeX -= box;
+            if (direction === "RIGHT") snakeX += box;
+            if (direction === "UP") snakeY -= box;
+            if (direction === "DOWN") snakeY += box;
 
-            if (snakeX == food.x && snakeY == food.y) {
-                eatSound.play(); // 🍎 Play eat sound
+            if (snakeX === food.x && snakeY === food.y) {
+                eatSound.play();
                 score++;
                 updateScore();
                 food = {
@@ -251,9 +259,9 @@
                 snakeX >= canvas.width || snakeY >= canvas.height ||
                 collision(newHead, snake)
             ) {
-                gameoverSound.play(); // 💥 Play game over sound
+                gameoverSound.play();
                 clearInterval(gameLoop);
-                alert("Game Over! Your score: " + score + "\nClick 'Try Again' to restart.");
+                alert("Game Over! Score: " + score + "\nClick 'Try Again' to restart.");
             }
 
             snake.unshift(newHead);
@@ -261,7 +269,7 @@
 
         function collision(head, array) {
             for (let i = 0; i < array.length; i++) {
-                if (head.x == array[i].x && head.y == array[i].y) {
+                if (head.x === array[i].x && head.y === array[i].y) {
                     return true;
                 }
             }
@@ -294,10 +302,10 @@
                 const accuracy = p.probability * 100;
 
                 if (accuracy > 60) {
-                    if (gesture == "left" && direction != "RIGHT") direction = "LEFT";
-                    else if (gesture == "right" && direction != "LEFT") direction = "RIGHT";
-                    else if (gesture == "up" && direction != "DOWN") direction = "UP";
-                    else if (gesture == "down" && direction != "UP") direction = "DOWN";
+                    if (gesture === "left" && direction !== "RIGHT") direction = "LEFT";
+                    else if (gesture === "right" && direction !== "LEFT") direction = "RIGHT";
+                    else if (gesture === "up" && direction !== "DOWN") direction = "UP";
+                    else if (gesture === "down" && direction !== "UP") direction = "DOWN";
                 }
             });
         }
@@ -307,17 +315,17 @@
             if (!document.fullscreenElement) {
                 if (elem.requestFullscreen) {
                     elem.requestFullscreen();
-                } else if (elem.webkitRequestFullscreen) {
+                } else if (elem.webkitRequestFullscreen) { /* Safari */
                     elem.webkitRequestFullscreen();
-                } else if (elem.msRequestFullscreen) {
+                } else if (elem.msRequestFullscreen) { /* IE11 */
                     elem.msRequestFullscreen();
                 }
             } else {
                 if (document.exitFullscreen) {
                     document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
+                } else if (document.webkitExitFullscreen) { /* Safari */
                     document.webkitExitFullscreen();
-                } else if (document.msExitFullscreen) {
+                } else if (document.msExitFullscreen) { /* IE11 */
                     document.msExitFullscreen();
                 }
             }
