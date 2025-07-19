@@ -184,17 +184,6 @@
             font-weight: bold;
             min-width: 70px;
         }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.1); opacity: 0.7; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-        
-       .food-pulse {
-            animation: pulse 1.5s infinite;
-        }
-
     </style>
 </head>
 <body>
@@ -227,13 +216,17 @@
     </div>
 
     <audio id="eatSound" src="eat.mp3" preload="auto"></audio>
-    <audio id="gameoverSound"src="gameover.mp3" preload="auto"></audio>
+    <audio id="gameoverSound" src="gameover.mp3" preload="auto"></audio>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
     <script type="text/javascript">
-        const URL = "./tm-my-image-model/";
+        // --- IMPORTANT ---
+        // Make sure your model is uploaded to a hosting service like Glitch, Netlify, or GitHub Pages.
+        // Then, replace the URL here with your model's public URL.
+        // Example: "https://teachablemachine.withgoogle.com/models/xyz123/"
+        const URL = "YOUR_MODEL_URL_HERE/";
 
         let model, webcam, labelContainer, maxPredictions;
         const canvas = document.getElementById("game");
@@ -250,7 +243,14 @@
             const modelURL = URL + "model.json";
             const metadataURL = URL + "metadata.json";
 
-            model = await tmImage.load(modelURL, metadataURL);
+            try {
+                model = await tmImage.load(modelURL, metadataURL);
+            } catch (e) {
+                console.error(e);
+                alert(`Failed to load the neural model.\n\nPlease check that the URL is correct and the model files are hosted online.\n\nError: ${e.message}`);
+                return; // Stop execution if the model fails to load
+            }
+
             maxPredictions = model.getTotalClasses();
 
             const flip = true;
@@ -259,9 +259,10 @@
             await webcam.play();
             window.requestAnimationFrame(loop);
 
+            document.getElementById("webcam-container").innerHTML = ''; // Clear previous webcam canvas if any
             document.getElementById("webcam-container").appendChild(webcam.canvas);
             labelContainer = document.getElementById("label-container");
-            labelContainer.innerHTML = "";
+            labelContainer.innerHTML = ""; // Clear previous labels
             for (let i = 0; i < maxPredictions; i++) {
                 labelContainer.appendChild(document.createElement("div"));
             }
@@ -301,27 +302,28 @@
             // Draw Snake
             for (let i = 0; i < snake.length; i++) {
                 if (i === 0) { // Head
-                    ctx.fillStyle = "#00ffff"; // Bright Cyan
+                    ctx.fillStyle = "#00ffff";
                     ctx.shadowColor = "#00ffff";
                     ctx.shadowBlur = 20;
                 } else { // Body
-                    ctx.fillStyle = "#00bfff"; // Deeper Cyan
+                    ctx.fillStyle = "#00bfff";
                     ctx.shadowColor = "#00bfff";
                     ctx.shadowBlur = 15;
                 }
                 ctx.fillRect(snake[i].x, snake[i].y, box, box);
-                ctx.shadowBlur = 0; // Reset shadow for next element
+                ctx.shadowBlur = 0;
             }
 
             // Draw Food (Data Packet)
-            ctx.fillStyle = "#ff00ff"; // Magenta
+            ctx.fillStyle = "#ff00ff";
             ctx.shadowColor = "#ff00ff";
-            ctx.shadowBlur = 15 + Math.sin(pulseCounter) * 7; // Pulsing glow
+            ctx.shadowBlur = 15 + Math.sin(pulseCounter) * 7;
             ctx.fillRect(food.x, food.y, box, box);
-            ctx.shadowBlur = 0; // Reset shadow
+            ctx.shadowBlur = 0;
 
-            let snakeX = snake.x;
-            let snakeY = snake.y;
+            // Get the current head position from the first element of the array
+            let snakeX = snake[0].x;
+            let snakeY = snake[0].y;
 
             if (direction === "LEFT") snakeX -= box;
             if (direction === "RIGHT") snakeX += box;
@@ -342,25 +344,24 @@
 
             let newHead = { x: snakeX, y: snakeY };
 
+            // Changed the bitwise OR (|) to logical OR (||)
             if (
-                snakeX < 0 |
-
-| snakeY < 0 ||
-                snakeX >= canvas.width |
-
-| snakeY >= canvas.height ||
+                snakeX < 0 || snakeY < 0 ||
+                snakeX >= canvas.width || snakeY >= canvas.height ||
                 collision(newHead, snake)
             ) {
                 gameoverSound.play();
                 clearInterval(gameLoop);
                 alert("CONNECTION TERMINATED. Final Score: " + score + "\nExecute 'Restart Protocol' to try again.");
+                return; // Stop the function after game over
             }
 
             snake.unshift(newHead);
         }
 
         function collision(head, array) {
-            for (let i = 0; i < array.length; i++) {
+            // Start from 1 to avoid checking the head against itself immediately
+            for (let i = 1; i < array.length; i++) {
                 if (head.x === array[i].x && head.y === array[i].y) {
                     return true;
                 }
@@ -369,7 +370,11 @@
         }
 
         function tryAgain() {
-            initGame();
+            if (webcam && model) { // Only restart game logic if model is loaded
+               initGame();
+            } else {
+                alert("Please start the simulation first to load the neural interface.");
+            }
         }
 
         function updateScore() {
@@ -377,29 +382,33 @@
         }
 
         async function loop() {
-            webcam.update();
-            await predict();
+            if (webcam) {
+                webcam.update();
+                await predict();
+            }
             window.requestAnimationFrame(loop);
         }
 
         async function predict() {
-            const prediction = await model.predict(webcam.canvas);
-            for (let i = 0; i < maxPredictions; i++) {
-                const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
-                labelContainer.childNodes[i].innerHTML = classPrediction;
-            }
-
-            prediction.forEach(p => {
-                const gesture = p.className.toLowerCase();
-                const accuracy = p.probability * 100;
-
-                if (accuracy > 60) {
-                    if (gesture === "left" && direction!== "RIGHT") direction = "LEFT";
-                    else if (gesture === "right" && direction!== "LEFT") direction = "RIGHT";
-                    else if (gesture === "up" && direction!== "DOWN") direction = "UP";
-                    else if (gesture === "down" && direction!== "UP") direction = "DOWN";
+            if (model) {
+                const prediction = await model.predict(webcam.canvas);
+                for (let i = 0; i < maxPredictions; i++) {
+                    const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                    labelContainer.childNodes[i].innerHTML = classPrediction;
                 }
-            });
+
+                prediction.forEach(p => {
+                    const gesture = p.className.toLowerCase();
+                    const accuracy = p.probability * 100;
+
+                    if (accuracy > 60) {
+                        if (gesture === "left" && direction !== "RIGHT") direction = "LEFT";
+                        else if (gesture === "right" && direction !== "LEFT") direction = "RIGHT";
+                        else if (gesture === "up" && direction !== "DOWN") direction = "UP";
+                        else if (gesture === "down" && direction !== "UP") direction = "DOWN";
+                    }
+                });
+            }
         }
 
         function toggleFullscreen() {
@@ -425,4 +434,3 @@
     </script>
 </body>
 </html>
-
